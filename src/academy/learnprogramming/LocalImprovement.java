@@ -69,31 +69,6 @@ public class LocalImprovement {
                                         Route rA = routeA.swap(node1B,node2B,node1A,node2A,k,k+1);
                                         Route rB = routeB.swap(node1A,node2A,node1B,node2B,l,l+1);
                                         if (rB!= null && rA != null){
-                                            Node start = problem.getNodes()[0];
-                                            for (Node node: rB.getRoute()){
-                                                if (node.getIndex()==0){
-                                                    continue;
-                                                }
-                                                if (start.getIndex()==node.getIndex()){
-                                                    System.out.println("LI MACHEN SCHEISSE");
-                                                }
-                                                start = node;
-                                            }
-
-
-                                            start = problem.getNodes()[0];
-                                            for (Node node: rA.getRoute()){
-                                                if (node.getIndex()==0){
-                                                    continue;
-                                                }
-                                                if (start.getIndex()==node.getIndex()){
-                                                    System.out.println("LI MACHEN SCHEISSE");
-                                                }
-                                                start = node;
-                                            }
-
-
-
                                             if (Problem.calculateDistance(rA)+Problem.calculateDistance(rB)<Problem.calculateDistance(routeA)+Problem.calculateDistance(routeB)) {
 //                                                System.out.println("true:(" + node1A + "," + node2A + ") routeA Index: " + i +" mit " + node1B + ", " + node2B  + "routeB Index: " +j );
 //                                                System.out.println(routeA);

@@ -1,6 +1,7 @@
 package academy.learnprogramming;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -8,28 +9,36 @@ public class BranchAndBoundTree extends Heuristiken {
 
     //Upperbound von Konstruktionsheuristik
     private double upperBound;
+    ArrayList<Node> customers; // alle Kunden eine Route (alle nodes außer 0)
     private BranchAndBoundNode root;
-    double bestSolutionValue = Integer.MAX_VALUE;
+    static double bestSolutionValue = Integer.MAX_VALUE;
     BranchAndBoundNode bestNode;
+    Solution nativeSolution;
 
-    public BranchAndBoundTree(Problem problem, double upperBound) {
+    public BranchAndBoundTree(Problem problem, double upperBound, ArrayList<Node> customers) {
         super(problem);
+        this.customers = customers;
         this.upperBound = upperBound;
         this.root = createRoot();
     }
 
+    public BranchAndBoundTree(Problem problem, double upperBound, ArrayList<Node> customers, Solution sol) {
+        super(problem);
+        this.customers = customers;
+        this.upperBound = upperBound;
+        this.root = createRoot();
+        nativeSolution = sol;
+
+    }
+
+
     private BranchAndBoundNode createRoot(){
-        ArrayList<Integer> refArray = new ArrayList<>();
-        //lieferstatus der Kunden wieder auf false setzen, weil dieser von eröffnungsheuristik noch auf true gestellt sein kann
-        problem.resetNodes();
-        for (int i=0;i<super.problem.getNodes().length;i++){
-            refArray.add(i);
-        }
-        //Instanzieren der Baumwurzel: erstellen einer ersten Route, die im Depot startet
-        Route firstRoute = new Route(0, super.problem.getVehicleCapacity());
-        firstRoute.addCustomer(Problem.nodes[0]);
+        Route route = new Route(0, super.problem.getVehicleCapacity());
+        route.addCustomer(Problem.nodes[0]);
         //Node mit index=0 kann mehrfach in Baum eingefügt werden
-        return new BranchAndBoundNode(refArray,0,Problem.nodes[0].getxPos(),Problem.nodes[0].getyPos(),firstRoute,Problem.nodes[0].getDemand(),null);
+        BranchAndBoundNode.UB = upperBound;
+        bestSolutionValue = Integer.MAX_VALUE;
+        return new BranchAndBoundNode(customers, problem.depotXPos, problem.depotYPos, route);
     }
 
 
@@ -37,51 +46,44 @@ public class BranchAndBoundTree extends Heuristiken {
     @Override
     public Solution solve() {
         Solution solution = new Solution("BranchAndBound");
-        solution.routes = this.bestNode.finishedRoutes;
-        solution.setSolutionValue(this.bestSolutionValue);
-        return solution;
+        ArrayList<Route> rs = new ArrayList<>();
+            if (this.bestNode!=null) {
+                rs.add(this.bestNode.fixatedRoute);
+                solution.routes = rs;
+                solution.calcSolutionValue();
+                return solution;
+            }
+        System.out.println("Branch and Bound Error");
+            return nativeSolution;
     }
 
     public void traverse(BranchAndBoundNode root){
-
         BranchAndBoundNode bestNode;
         if (root == null){
             root = this.root;
         }
-        if (!root.getChildren().isEmpty()){
-            for (Integer key:root.getChildren().keySet()){
-                traverse(root.getChildren().get(key));
+        if (!root.availableSuccessors.isEmpty()){
+            ArrayList<BranchAndBoundNode> subNodes = root.createSubNodes();
+            Collections.sort(subNodes);
+            for (BranchAndBoundNode n: subNodes){
+                traverse(n);
             }
         }
         //nur noch depot als Nachfolger bedeutet alle Kunden zugeordnet
 
         if (root.isFinished()){
+            root.fixatedRoute.addCustomer(problem.getNodes()[0]);
             if (root.calculateSolutionValue() < bestSolutionValue){
+                BranchAndBoundNode.UB = root.calculateSolutionValue();
                 bestSolutionValue = root.getSolutionValue();
                 bestNode = root;
-                this.bestNode =bestNode;
+                this.bestNode = bestNode;
             }
         }
 
     }
 
-    //rekursive Funktion, die den gesamten Baum aufstellt und wurzel ausgibt
-    public BranchAndBoundNode createChildren(BranchAndBoundNode root){
-        //layer 1 erstellen
-        if (root == this.root){
-            root.createSubNodes();
-            Map<Integer,BranchAndBoundNode> layer1 = root.getChildren();
-            for (Integer key:layer1.keySet()){
-                createChildren(layer1.get(key));
-            }
-        } else if (root != null){
-            Map<Integer,BranchAndBoundNode> subNodes = root.createSubNodes();
-            for(Integer key: subNodes.keySet()) {
-                createChildren(subNodes.get(key));
-            }
-        }
-        return this.root;
-    }
+
 
     public BranchAndBoundNode getRoot() {
         return root;

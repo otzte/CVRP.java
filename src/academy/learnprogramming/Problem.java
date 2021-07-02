@@ -12,12 +12,14 @@ public class Problem {
     final int depotYPos;
     public static int vehicleCapacity;
     private int sumOfDemand;  //prüfen, ob problem überhaupt lösbar ist
+    private int seed;
 
-    public Problem(int numberOfCustomers, int numberOfVehicles, int vehicleCapacity, int depotXPos, int depotYPos) {
+    public Problem(int numberOfCustomers, int numberOfVehicles, int vehicleCapacity, int depotXPos, int depotYPos,int seed) {
         this.numberOfCustomers = numberOfCustomers;
         this.numberOfVehicles = numberOfVehicles;
         this.depotXPos = depotXPos;
         this.depotYPos = depotYPos;
+        this.seed = seed;
         nodes = new Node[numberOfCustomers +1];
         distances = new double[numberOfCustomers+1][numberOfCustomers+1];
         generateRandomNodes();
@@ -28,7 +30,7 @@ public class Problem {
 
     //Array mit Kunden erstellen, zufällig auf einer Fläche von 0-100 Längeneinheiten verteilt
     private void generateRandomNodes(){
-            Random rand = new Random(46573490);
+            Random rand = new Random(seed);
             nodes[0] = new Node(depotXPos, depotYPos);
             for (int i = 1; i <= numberOfCustomers; i++) {
                 int xpos = rand.nextInt(100) + 1;

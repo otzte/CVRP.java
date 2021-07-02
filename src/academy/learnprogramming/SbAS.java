@@ -13,8 +13,9 @@ public class SbAS extends Heuristiken {
     private final double startingPheromone;
     private double savings[][];
     private final int numOfSubProblems = 4; //varainte b 10
+    private double averageDistance;
 
-    public SbAS(Problem problem, double startingPheromone, double sv) {
+    public SbAS(Problem problem, double startingPheromone, double sv, double averageDistance) {
         super(problem);
         //initialisieren der globalen Pheromonmatrix mit startwert des Pheromons
         this.startingPheromone = startingPheromone;
@@ -22,13 +23,24 @@ public class SbAS extends Heuristiken {
         savingsSolutionValue = sv;
         calculateSavings(problem.numberOfCustomers, problem.getNodes());
         globalPheromone = new Pheromone(problem.numberOfCustomers, startingPheromone);
+        this.averageDistance = averageDistance;
     }
+
+    public void resetPheromone(){
+        globalPheromone = new Pheromone(problem.numberOfCustomers, startingPheromone);
+    }
+
+
+
+
+
+
 
     private void calculateSavings(int numOfCustomers, Node[] customers) {
         savings = new double[numOfCustomers + 1][numOfCustomers + 1];
         for (int i = 1; i < numOfCustomers; i++) {
             Node customerI = customers[i];
-            for (int j = i + 1; j < numOfCustomers + 1; j++) {
+            for (int j = 1; j < numOfCustomers + 1; j++) {
                 Node customerJ = customers[j];
                 double cij = problem.getDistances()[customerI.getIndex()][customerJ.getIndex()];
                 double c0i = problem.getDistances()[0][customerI.getIndex()];
@@ -39,8 +51,8 @@ public class SbAS extends Heuristiken {
     }
 
     private class SubproblemA {
-         ArrayList<Node> Customers;
-         double bestValue;
+        ArrayList<Node> Customers;
+        double bestValue;
 
         public SubproblemA(ArrayList<Node> customers, double bestValue) {
             Customers = customers;
@@ -53,18 +65,22 @@ public class SbAS extends Heuristiken {
 
         @Override
         public boolean equals(Object obj) {
-                for (Node n : this.Customers) {
-                    if (!((SubproblemA) obj).getCustomers().contains(n)) {
-                        return false;
-                    }
+            if (!(obj instanceof SubproblemA)){
+               return false;
+            }
+            for (Node n : this.Customers) {
+                if (!((SubproblemA) obj).getCustomers().contains(n)) {
+                    return false;
                 }
-                for (Node n : ((SubproblemA) obj).getCustomers()) {
-                    if (!this.Customers.contains(n)) {
-                        return false;
-                    }
+            }
+            for (Node n : ((SubproblemA) obj).getCustomers()) {
+                if (!this.Customers.contains(n)) {
+                    return false;
                 }
+            }
             return true;
         }
+
         public ArrayList<Node> getCustomers() {
             return Customers;
         }
@@ -72,14 +88,14 @@ public class SbAS extends Heuristiken {
 
     }
 
-    private void subUpdate(Solution s,ArrayList<Node> c){
-     //   double sumPherSubSet = globalPheromone.sumSub(c);
+    private void subUpdate(Solution s, ArrayList<Node> c) {
+        //   double sumPherSubSet = globalPheromone.sumSub(c);
 //        System.out.println("before:" + sumPherSubSet);
 //        globalPheromone.evaporate(trailPersistence,c);
         for (Route r : s.getRoutes()) {
             Node start = r.getRoute().get(0);
             for (Node n : r.getRoute()) {
-                if (start.getIndex() ==  n.getIndex()){
+                if (start.getIndex() == n.getIndex()) {
                     continue;
                 }
                 globalPheromone.update(s.getSolutionValue(), start.getIndex(), n.getIndex(), 1); //Enhancement Factor bei Varainte A: 1 Variante B: 72
@@ -93,7 +109,7 @@ public class SbAS extends Heuristiken {
 
     @Override
     public Solution solve() {
-        double startTime  = System.currentTimeMillis();
+        double startTime = System.currentTimeMillis();
         int iteration = 0;
         Solution bestSolution = null;
         boolean flag = true;
@@ -104,79 +120,45 @@ public class SbAS extends Heuristiken {
         }
         while (flag) {
 
-            Solution globalSolution = ACO(customers, 100, Integer.MAX_VALUE, 3, 3, true);
+            Solution globalSolution = ACO(customers, problem.numberOfCustomers, Integer.MAX_VALUE, 1, 3, true,false );
             bestSolution = globalSolution;
-            System.out.println(bestSolution + " nach " + (System.currentTimeMillis()-startTime));
+            System.out.println("Startlösung: " + bestSolution + " nach " + (System.currentTimeMillis() - startTime));
+
+
+            //RESTET LATER ENTRIES
+            XLData = new double[30][2];
+            XLData[0][0] = bestSolution.getSolutionValue();
+            XLData[0][1] = System.currentTimeMillis() - startTime;
             bestSolutionValue = bestSolution.getSolutionValue();
 
             ArrayList<SubproblemA> subproblemAS = new ArrayList<>();
-
-            while (System.currentTimeMillis()-startTime<600000 ) {
+            int improvements = 0;
+            while (System.currentTimeMillis() - startTime < 120000) {
                 // globale Lösung
                 //Problem aufteilen entsprechend der Routen
-                ArrayList<Node> centersOfGravity = miehleAlgorithm(globalSolution.getRoutes());
-                ArrayList<ArrayList<Node>> customerSets = sweep(numOfSubProblems, centersOfGravity, globalSolution);
+                ArrayList<Node> centersOfGravity = miehleAlgorithm(bestSolution.getRoutes());
+                ArrayList<Subproblem> customerSets = sweep(numOfSubProblems, centersOfGravity, globalSolution);
                 //subproblem mit größerer Iterationszahl lösen
-                Solution subProbCombined = null;
+                Solution subProbCombinedSolution = new Solution("combined");
                 for (int i = 0; i < customerSets.size(); i++) {
-                    Solution subProbSolution = ACO(customerSets.get(i), 100, 10000, 5, 3, false);
-                    if (subproblemAS.size()<numOfSubProblems){
-                        subproblemAS.add(new SubproblemA(customerSets.get(i),subProbSolution.getSolutionValue()));
-//                        subUpdate(subProbSolution,customerSets.get(i));
-//                        double sumPherSubSet = globalPheromone.sumSub(customerSets.get(i));
-//                        globalPheromone.evaporate(trailPersistence,customerSets.get(i));
-//                        for (Route r : subProbSolution.getRoutes()) {
-//                            Node start = r.getRoute().get(0);
-//                            for (Node n : r.getRoute()) {
-//                                globalPheromone.update(subProbSolution.getSolutionValue(), start.getIndex(), n.getIndex(), 1);
-//                                start = n;
-//                            }
-//                        }
-//                        globalPheromone.normalize(sumPherSubSet,customerSets.get(i));
-                    }else {
-                        SubproblemA obj = new SubproblemA(customerSets.get(i),subProbSolution.getSolutionValue());
-                        if (!subproblemAS.contains(obj)){
-                            subproblemAS.add(obj);
-//                            subUpdate(subProbSolution,customerSets.get(i));
-//                            for (Route r : subProbSolution.getRoutes()) {
-//                                Node start = r.getRoute().get(0);
-//                                for (Node n : r.getRoute()) {
-//                                    globalPheromone.update(subProbSolution.getSolutionValue(), start.getIndex(), n.getIndex(), 1);
-//                                    start = n;
-//                                }
-//                            }
-                        } else  {
-                            //OBJEKT BEREITS VORHANDEN
-                            for (SubproblemA sp: subproblemAS){
-                                if (sp.equals(obj)){
-                                    if (obj.getBestValue()< sp.bestValue){
-                                        sp.bestValue = subProbSolution.getSolutionValue();
-                                        //UPDATE BEI NEUER BESTER LÖSUNG DES SUBPROBLEMS
-                                        subUpdate(subProbSolution,customerSets.get(i));
-//                                        for (Route r : subProbSolution.getRoutes()) {
-//                                            Node start = r.getRoute().get(0);
-//                                            for (Node n : r.getRoute()) {
-//                                                globalPheromone.update(subProbSolution.getSolutionValue(), start.getIndex(), n.getIndex(), 1);
-//                                                start = n;
-//                                            }
-//                                        }
-                                    }
-                                }
-                            }
-                        }
+
+                    Solution subProbSolution = ACO(customerSets.get(i).getCustomers(), customerSets.get(i).getCustomers().size(), 10000, 10, 3, false,false);
+                    subProbCombinedSolution.addSubSolution(subProbSolution);
+
+                    if (subProbSolution.getSolutionValue() < customerSets.get(i).getOriginalDistance()) {
+                        subUpdate(subProbSolution, customerSets.get(i).getCustomers());
                     }
+
                 }
 
-
-//                if (subProbCombined.getSolutionValue() < bestSolutionValue) {
-//                    bestSolution = subProbCombined;
-//                    bestSolutionValue = subProbCombined.getSolutionValue();
-//                }
                 iteration++;
 
 
-                Solution newGlobalSolution = ACO(customers, 100, bestSolutionValue * 10 , 3, 3, true);
-                System.out.println(newGlobalSolution);
+                Solution newGlobalSolution = ACO(customers, problem.numberOfCustomers, Integer.MAX_VALUE, 1, 3, true,false);
+                if (newGlobalSolution.getSolutionValue() > subProbCombinedSolution.getSolutionValue()){
+                    newGlobalSolution = subProbCombinedSolution;
+                }
+
                 if (newGlobalSolution != null) {
                     if (newGlobalSolution.getSolutionValue() < globalSolution.getSolutionValue()) {
                         globalSolution = newGlobalSolution;
@@ -184,7 +166,10 @@ public class SbAS extends Heuristiken {
                             bestSolution = globalSolution;
                             bestSolutionValue = bestSolution.getSolutionValue();
                             System.out.println("neuer bester zfw" + bestSolutionValue);
-                            System.out.println("Laufzeit: " + (System.currentTimeMillis()-startTime));
+                            System.out.println("Laufzeit: " + (System.currentTimeMillis() - startTime));
+                            improvements++;
+                            XLData[improvements][0] = bestSolution.getSolutionValue();
+                            XLData[improvements][1] = System.currentTimeMillis() - startTime;
                         }
                     }
                 }
@@ -202,10 +187,11 @@ public class SbAS extends Heuristiken {
 
 
 
+
     //Eingabe der Kunden, mit denen ACO durchgeführt werden soll
     //erlaubt flexibilität, sodass sowohl globales Problem als auch subproblem mit der Funktion gelöst werden kann
     //numofelitists : wieviel der besten Lösungen erzeugen eig pheromonupdate?
-    public Solution ACO(ArrayList<Node> customers, int antsInColony, double best, int numOfIterations, int numOfElitists, boolean isGlobal) {
+    public Solution ACO(ArrayList<Node> customers, int antsInColony, double best, int numOfIterations, int numOfElitists, boolean isGlobal, boolean randomAnt) {
         //beziehen einer lokalen Pheromonmatrix
         Pheromone localPheromone;
         if (!isGlobal) {
@@ -224,7 +210,7 @@ public class SbAS extends Heuristiken {
                 ArrayList<Route> antsRoutes = new ArrayList<>();
                 //initialen 0,i,0 Routen erstellen
                 for (int i = 0; i < customers.size(); i++) {
-                    if (customers.get(i).getIndex()==0){
+                    if (customers.get(i).getIndex() == 0) {
                         continue;
                     }
                     Route antsRoute = new Route(i, vehicleCapacity);
@@ -240,18 +226,25 @@ public class SbAS extends Heuristiken {
                 for (int i = 1; i < customers.size() - 1; i++) {
                     Node customerI = customers.get(i);
                     for (int j = i + 1; j < customers.size(); j++) {
-
                         Node customerJ = customers.get(j);
+                        if (problem.getDistances()[customerI.getIndex()][customerJ.getIndex()]>averageDistance){
+                            continue;
+                        }
                         //Formel Testen für computational Study
                         //Grid Search mit unterschiedlichen Parameterwerten
-                        antsAvailableOptions.add(new Zeta(Math.pow(savings[customerI.getIndex()][customerJ.getIndex()],5) * Math.pow(localPheromone.getPheromone(customerI.getIndex(), customerJ.getIndex()),5), customerI, customerJ));
+                        double sav = Math.pow(savings[customerI.getIndex()][customerJ.getIndex()], 5);
+                        if (sav <= 0) {
+                            continue;
+                        }
+                        double value = sav * Math.pow(localPheromone.getPheromone(customerI.getIndex(), customerJ.getIndex()), 5);
+                        antsAvailableOptions.add(new Zeta(value, customerI, customerJ));
                     }
                 }
                 Collections.sort(antsAvailableOptions);
                 //solange sich noch routen zusammenfügen lassen
                 boolean improvementPossible = true;
                 while (improvementPossible) {
-                    int max = Math.min(antsAvailableOptions.size(),antsInColony/4);
+                    int max = Math.min(Math.min(antsAvailableOptions.size(), antsInColony / 4),25);
 
                     double sum = 0;
                     for (int i = 0; i < max; i++) {
@@ -280,17 +273,25 @@ public class SbAS extends Heuristiken {
                     }
                     //zwei zugehörigen routen ermitteln und zusammenfügen wenn die Kunden nicht mitten in einer Route drinstecken
                     if (candidate != null) {
+                        boolean thisStart = false;
+                        boolean partnerStart = false;
                         Route route1 = null;
                         Route route2 = null;
                         for (Route r : antsRoutes) {
                             if (r.contains(candidate.getCustomer1().getIndex())) {
                                 if (checkIfStartOrEnd(r, candidate.getCustomer1().getIndex())) {
                                     route1 = r;
+                                    if(route1.getRoute().indexOf(candidate.getCustomer1())==1){
+                                        thisStart = true;
+                                    }
                                 }
                             }
                             if (r.contains(candidate.getCustomer2().getIndex())) {
                                 if (checkIfStartOrEnd(r, candidate.getCustomer2().getIndex())) {
                                     route2 = r;
+                                    if (route2.getRoute().indexOf(candidate.getCustomer2())==1){
+                                        partnerStart=true;
+                                    }
                                 }
                             }
 
@@ -308,11 +309,25 @@ public class SbAS extends Heuristiken {
                                         antsRoutes.remove(i);
                                         i--;
                                     }
+                                    //Routen mit kombinierten Knoten entfernen weil saving nicht mehr realisiert werden kann
+
                                 }
-                                Route newRoute = route1.concatenateRoutes(route2, true, true);
+                                // ZUFÄLLIGE VERKNÜPFUNG
+                                if (ant % 3 == 0 && randomAnt){
+                                    thisStart = true;
+                                    partnerStart = true;
+                                }
+                                Route newRoute = route1.concatenateRoutes(route2, thisStart, partnerStart);
                                 antsRoutes.add(newRoute);
+//                                for (int i=0;i<antsAvailableOptions.size();i++){
+//                                    if (antsAvailableOptions.get(i).contains(candidate.customer1) || antsAvailableOptions.get(i).contains(candidate.customer2)){
+//                                        antsAvailableOptions.remove(i);
+//                                        i--;
+//                                    }
+//                                }
                             }
                         }
+
                         antsAvailableOptions.remove(candidateID);
                     } else {
                         improvementPossible = false;
@@ -326,26 +341,27 @@ public class SbAS extends Heuristiken {
 
             }
             Collections.sort(allSolutions);
-            if (allSolutions.get(0).getSolutionValue()<best) {
+            if (allSolutions.get(0).getSolutionValue() < best) {
                 best = allSolutions.get(0).getSolutionValue();
                 bestSolution = allSolutions.get(0);
             }//Variante A : alle k besten lösungen erzeugen update
-                double sumPherSubSet = globalPheromone.sumSub(customers);
-                localPheromone.evaporate(trailPersistence);
-                for (int i = 0; i < numOfElitists; i++) {
-                    ArrayList<Route> antsRoutes = allSolutions.get(i).getRoutes();
-                    Solution antsSolution = allSolutions.get(i);
+            double sumPherSubSet = globalPheromone.sumSub(customers);
+            localPheromone.evaporate(trailPersistence);
+            numOfElitists = Math.min(numOfElitists, allSolutions.size());
+            for (int i = 0; i < numOfElitists; i++) {
+                ArrayList<Route> antsRoutes = allSolutions.get(i).getRoutes();
+                Solution antsSolution = allSolutions.get(i);
 //                    System.out.println(antsSolution.getRoutes());
-                    for (Route r : antsRoutes) {
-                        for (int j = 1; j < r.getRoute().size(); j++) {
-                            localPheromone.update(antsSolution.getSolutionValue(), r.getRoute().get(j - 1).getIndex(), r.getRoute().get(j).getIndex(), numOfElitists - i);
+                for (Route r : antsRoutes) {
+                    for (int j = 1; j < r.getRoute().size(); j++) {
+                        localPheromone.update(antsSolution.getSolutionValue(), r.getRoute().get(j - 1).getIndex(), r.getRoute().get(j).getIndex(), numOfElitists - i);
 //                            System.out.println("i:   " + r.getRoute().get(j - 1).getIndex() +  "   j:   " + r.getRoute().get(j).getIndex() + " --->"+ globalPheromone.pheromoneMatrix[r.getRoute().get(j - 1).getIndex()][r.getRoute().get(j).getIndex()]);
-                        }
                     }
-
                 }
+
+            }
 //                localPheromone.normalize(sumPherSubSet, customers);
-           // } //Variante B: nur bei einer verbesserung erzeugen k besten lösungen ein update
+            // } //Variante B: nur bei einer verbesserung erzeugen k besten lösungen ein update
 
         }
         return bestSolution;
@@ -498,7 +514,7 @@ public class SbAS extends Heuristiken {
             }
             xpos /= sumOfDemand;
             ypos /= sumOfDemand;
-            Node dummy = new Node(counter, (int) xpos, (int) ypos, 0);
+            Node dummy = new Node(counter, (int) xpos, (int) ypos, (int) Problem.calculateDistance(route));
             centersOfGravity.add(dummy);
             counter++;
         }
@@ -509,10 +525,16 @@ public class SbAS extends Heuristiken {
         private ArrayList<Node> customers;
         private double angleToSweepStart;
         private int index;
+        private double originalDistance;
 
-        public Subproblem(ArrayList<Node> customers, double angleToSweepStart) {
+        public Subproblem(ArrayList<Node> customers, double angleToSweepStart, double pD) {
             this.customers = customers;
             this.angleToSweepStart = angleToSweepStart;
+            this.originalDistance = pD;
+        }
+
+        public void addDist(double dist) {
+            originalDistance += dist;
         }
 
         @Override
@@ -525,6 +547,14 @@ public class SbAS extends Heuristiken {
             return 0;
         }
 
+        public double getOriginalDistance() {
+            return originalDistance;
+        }
+
+        public boolean addCustomers(ArrayList<Node> customers) {
+            return this.customers.addAll(customers);
+        }
+
         public double getAngleToSweepStart() {
             return angleToSweepStart;
         }
@@ -533,7 +563,7 @@ public class SbAS extends Heuristiken {
             return customers;
         }
 
-        public void setIndex(int i){
+        public void setIndex(int i) {
             this.index = i;
         }
 
@@ -547,8 +577,8 @@ public class SbAS extends Heuristiken {
         }
     }
 
-    private ArrayList<ArrayList<Node>> sweep(int numOfSubProblems, ArrayList<Node> cog, Solution solution) {
-        ArrayList<ArrayList<Node>> subProblems = new ArrayList<>();
+    private ArrayList<Subproblem> sweep(int numOfSubProblems, ArrayList<Node> cog, Solution solution) {
+        ArrayList<Subproblem> subProblems = new ArrayList<>();
         ArrayList<Subproblem> cogs = new ArrayList<>();
         double start = 360 * Math.random();
         start = Math.toRadians(start);
@@ -595,54 +625,49 @@ public class SbAS extends Heuristiken {
                 alpha = 360 - alpha;
             }
             //Hilfsklasse mit Winkel zw sweep Start und Center of gravity + den zugehörigen Kunden zum CoG
-            cogs.add(new Subproblem(solution.getRoutes().get(counter).getRoute(), alpha));
+            cogs.add(new Subproblem(solution.getRoutes().get(counter).getRoute(), alpha, Problem.calculateDistance(solution.getRoutes().get(counter))));
             counter++;
 
         }
         Collections.sort(cogs);
-        for (int i=0;i<cogs.size();i++){
+        for (int i = 0; i < cogs.size(); i++) {
             cogs.get(i).setIndex(i);
         }
 
-
-        int addition = 0;
-        if (cogs.size() % 2 != 0) {
-            addition += 1;
-        }
         int routesPerSubProblem = (cogs.size() / numOfSubProblems);
 
-        if (routesPerSubProblem==0){
-            for (Subproblem s:cogs){
-                subProblems.add(s.getCustomers());
-            }
-            return subProblems;
+        if (routesPerSubProblem == 0) {
+            return cogs;
         }
 
         int n_extra = cogs.size() - numOfSubProblems * routesPerSubProblem;
 
         int noOfSubset = 1;
         int cogsInSubset = 0;
+        double prevDist = 0;
         ArrayList<Node> subset = new ArrayList<>();
-        for (Subproblem s: cogs){
+        for (Subproblem s : cogs) {
             int cogsToAdd = routesPerSubProblem;
-            if (noOfSubset <= n_extra){
-                cogsToAdd = routesPerSubProblem +1;
+            if (noOfSubset <= n_extra) {
+                cogsToAdd = routesPerSubProblem + 1;
             }
-            if (cogsInSubset<cogsToAdd){
+            if (cogsInSubset < cogsToAdd) {
                 subset.addAll(s.getCustomers());
+                prevDist += s.getOriginalDistance();
                 cogsInSubset++;
             }
-            if (cogsInSubset == cogsToAdd){
-                for (int x =1;x<subset.size();x++){
+            if (cogsInSubset == cogsToAdd) {
+                for (int x = 1; x < subset.size(); x++) {
                     if (subset.get(x).getIndex() == 0) {
                         subset.remove(x);
                         x--;
                     }
                 }
-                subProblems.add(subset);
+                subProblems.add(new Subproblem(subset, 0, prevDist));
+                prevDist = 0;
                 subset = new ArrayList<>();
                 noOfSubset++;
-                cogsInSubset=0;
+                cogsInSubset = 0;
             }
         }
 

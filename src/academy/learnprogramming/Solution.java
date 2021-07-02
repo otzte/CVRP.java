@@ -23,6 +23,13 @@ public class Solution implements Comparable<Solution> {
         calcSolutionValue();
     }
 
+    public Solution(String nameOfSolvingHeuristik,Route r) {
+        this.nameOfSolvingHeuristik = nameOfSolvingHeuristik;
+        routes = new ArrayList<>();
+        routes.add(r);
+        calcSolutionValue();
+    }
+
     public Solution(Solution s){
         this.solutionValue = s.getSolutionValue();
         this.routes = new ArrayList<>();

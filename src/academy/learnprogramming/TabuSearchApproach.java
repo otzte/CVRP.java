@@ -6,52 +6,39 @@ public class TabuSearchApproach extends Heuristiken {
 
     private final Solution startingSolution;
     ArrayList<Puzzle> solutionPuzzles = new ArrayList<>();
-    private Variable[][] searchHistory;
-    private final int L = 150;
+    private final int L = 240;
 
-    public TabuSearchApproach(Problem problem, Solution startingSolution) {
+    //PARAMETER FÜR MACHINE LEARNING
+    double t ; //tabudauer
+    double divFac; //beeinflusst strafterm für zu häufig wechselnde Nodes
+    int noOfTabuIterations ;
+    int noOfGlobalACOAIterations ;
+    int noOfSubACOAIterations ;
+    int cakePieces; //bestimmt größe der Subprobleme
+    boolean randomAnt; // ob jede 3. Ameise random Laufen soll
+    double sweepAngle; // random Sweep oder konstanter winkel: <0 - random, >0 - Range zwischen 5° und 150°
+    int bnbUsage;  // 0 - kein BnB, 1  - im Dekompositionsansatz, 2 - in der Tabususche
+    double averageDistance;
+
+
+    public TabuSearchApproach(Problem problem, Solution startingSolution, double tabu, double div, int noOfTabuIterations, int global, int sub, int cakePieces, boolean randomAnt, double sweepAngle, int bnbUsage, double aD) {
         super(problem);
         this.startingSolution = startingSolution;
-        initializeSearchHistory();
+        this.t = tabu;
+        this.divFac = div;
+        this.noOfTabuIterations = noOfTabuIterations;
+        this.noOfGlobalACOAIterations = global;
+        this.noOfSubACOAIterations = sub;
+        this.cakePieces = cakePieces;
+        this.randomAnt = randomAnt;
+        this.sweepAngle = sweepAngle;
+        this.bnbUsage = bnbUsage;
+        this.averageDistance =aD;
     }
 
-    private void initializeSearchHistory() {
-        searchHistory = new Variable[problem.numberOfCustomers + 1][problem.numberOfCustomers + 1];
-        for (int i = 0; i <= problem.numberOfCustomers; i++) {
-            for (int j = 0; j <= problem.numberOfCustomers; j++) {
-                searchHistory[i][j] = new Variable();
-            }
-        }
-    }
 
-    private class Variable {
-        private double searchHistoryValue = 0;
-        private boolean locked = false;
 
-        public Variable() {
-        }
 
-        public void update(double value) {
-            this.searchHistoryValue += value;
-        }
-
-        public double getSearchHistoryValue() {
-            return searchHistoryValue;
-        }
-
-        public void lock() {
-            this.locked = true;
-        }
-
-        public void increase(double solutionvalue) {
-            searchHistoryValue += (double) 1 / solutionvalue;
-        }
-
-        @Override
-        public String toString() {
-            return " " + searchHistoryValue;
-        }
-    }
 
     private class Puzzle implements Comparable<Puzzle> {
         private Route route;
@@ -107,7 +94,13 @@ public class TabuSearchApproach extends Heuristiken {
         public boolean equals(Object obj) {
             if (!(obj instanceof Puzzle)) {
                 return false;
+            } else if ((((Puzzle) obj).getRoute().size()!=route.size())){
+                return false;
             }
+            //wenn Puzzleteil exakt dieselben Kunden beinhält braucht es nicht hinzugefügt werden
+            //weil es keine neue information über die Partitionierung liefert
+            //aber dann vermehrt sich das ja nicht???
+            //also wie lasse ich es sich sinnvoll vermehren??
             for (Node n : ((Puzzle) obj).getRoute().getRoute()) {
                 if (!this.route.contains(n)) {
                     return false;
@@ -119,7 +112,7 @@ public class TabuSearchApproach extends Heuristiken {
                     return false;
                 }
             }
-
+//
             if (((Puzzle) obj).getSolutionValue() == this.getSolutionValue()) {
                 return true;
             }
@@ -133,57 +126,109 @@ public class TabuSearchApproach extends Heuristiken {
         for (Route r : s.getRoutes()) {
             if (r.getRoute().size() > 3) {
                 Puzzle newPuzzle = new Puzzle(r, s.getSolutionValue());
-                if (!solutionPuzzles.contains(newPuzzle)) {
+//                if (!solutionPuzzles.contains(newPuzzle)) {
                     solutionPuzzles.add(newPuzzle);
-                }
+//                }
             }
         }
     }
 
-    private void updateSearchHistory(Solution bestSolution) {
-        for (Route r : bestSolution.getRoutes()) {
-            int start = 0;
-            for (int i = 1; i < r.getRoute().size(); i++) {
-                int jIndex = r.getRoute().get(i).getIndex();
-                searchHistory[start][jIndex].update(1d / bestSolution.getSolutionValue());
-                searchHistory[jIndex][start].update(1d / bestSolution.getSolutionValue());
-                start = jIndex;
-            }
-        }
-    }
+
+
 
     @Override
+    //DEKOMPOSITIONSANSATZ (ALGORITHMUS 7)
     public Solution solve() {
+        double angle;
         ArrayList<Node> customers = new ArrayList<>();
         Collections.addAll(customers, problem.getNodes());
-        Solution bestSolution = new SbAS(problem, 0.14, 10000).ACO(customers, 100, 10000, 10, 3, true);
+        double startTime = System.currentTimeMillis();
+        Solution bestSolution = new SbAS(problem, 0.14, 10000,averageDistance).ACO(customers, 100, 10000, noOfGlobalACOAIterations, 3, true, randomAnt); //PARAM kein bugabuse
+        int improvements = 0;
 
-        updateSearchHistory(bestSolution);
+        //RESTET LATER ENTRIES
+        XLData = new double[30][2];
+        XLData[0][0] = bestSolution.getSolutionValue();
+        XLData[0][1] = System.currentTimeMillis() - startTime;
         addSolutionPuzzles(startingSolution);
-        double startAngle = 0;
-
-        int startSubProblemIndex = 0;
         // ZEHN STARTLÖSUNGEN ERZEUGEN
         for (int grit = 0; grit < 2; grit++) {
-            for (int it = 0; it < 5; it++) {
-                int noOfSubProblems = 4;
+            int addition=0;
+            if (grit>0){
+                addition = 80;
+            }
+            for (int it = 1; it < 20 + addition  ; it++) { //PARAM
+                int noOfSubProblems = bestSolution.size() - 1; //PARAM
                 System.out.println("ITERATION " + it + " : " + bestSolution);
                 //Problem partitionieren
                 ArrayList<Node> cogs = miehleAlgorithm(bestSolution.getRoutes());
-                ArrayList<Subproblems> subProblems = sweep(noOfSubProblems, cogs, bestSolution, startAngle); //10
+                ArrayList<Subproblems> subProblems ;
 
 
-                //Teilprobleme lösen und zusammenfügen
-                Solution combinedSolution = null;
-                for (Subproblems subPorblem : subProblems) {
-                    if (combinedSolution == null) {
-                        combinedSolution = tabuSearch(subPorblem.getRoutes(), 30, false);//30
+                //sweep angle festlegen
+                if (sweepAngle<0){
+                    angle = Math.random() * 360;
+                }else {
+                    angle = 5 + sweepAngle * 145;
+                }
+                //wenn erste Großiteration durch ist: Intensivierung
+                if (it % 10 == 0) {
+                    subProblems =sweep(1, cogs, bestSolution, angle*it, cakePieces);//10 //PARAM
+                }else {
+                    subProblems = sweep(3, cogs, bestSolution, angle*it , bestSolution.size()/2 + 1 );
+                }
 
-                    } else {
-                        combinedSolution.addSubSolution(tabuSearch(subPorblem.getRoutes(), 30, false));
+                //BRANCH AND BOUND FÜR GESAMTLÖSUNG VERWENDEN
+                if (bnbUsage == 1){
+                    if (it % 10 == 0) {
+                        Solution bnbCombined = new Solution("BnBCombined");
+                        for (Route r : bestSolution.getRoutes()) {
+                            BranchAndBoundTree searchTree = new BranchAndBoundTree(problem, Problem.calculateDistance(r) + 2, r.returnCustomers(), new Solution("native", r));
+                            searchTree.traverse(null);
+                            Solution sol = searchTree.solve();
+                            bnbCombined.addSubSolution(sol);
+
+                        }
+                        if (bnbCombined.getSolutionValue() < bestSolution.getSolutionValue()) {
+                            bestSolution = bnbCombined;
+                        }
                     }
                 }
 
+
+
+
+
+
+                //Teilprobleme lösen und zusammenfügen
+                Solution combinedSolution = new Solution("combined Solution");
+
+                //SUBPROBLEME MIT TS LÖSEN
+                for (Subproblems subPorblem : subProblems) {
+                        Solution subSol;
+                        subSol    =tabuSearch(subPorblem.getNodes(), noOfTabuIterations, false);
+                        //DIVERSIFIKATION in der ersten Großiteration: sämtliche subsolutions gehen in die globale Lösung ein
+                        if (grit <= 0){
+                            combinedSolution.addSubSolution(subSol);
+                        }
+                        // INTENSIFIKATION: nur bessere neu erzeugte subsolutions gehen in die Lösung des gesamtproblems ein
+                        else {
+                        double prevSubProbSolVal = 0;
+                        for (Route r:subPorblem.getRoute() ){
+                            prevSubProbSolVal += Problem.calculateDistance(r);
+                        }
+                        //falls vorherige Lösung schlechter ist
+                        if (prevSubProbSolVal> subSol.getSolutionValue()) {
+                            combinedSolution.addSubSolution(subSol);
+                        }else{
+                            combinedSolution.addSubSolution(new Solution("alt",subPorblem.getRoute()));
+                        }
+                        }
+                    }
+
+
+
+                //Leere Routen aus bester Lösung entfernen
                 for (int i = 0; i < combinedSolution.getRoutes().size(); i++) {
                     if (combinedSolution.getRoutes().get(i).isPlatzPatrone()) {
                         combinedSolution.getRoutes().remove(i);
@@ -192,22 +237,23 @@ public class TabuSearchApproach extends Heuristiken {
                 }
 
 
-                addSolutionPuzzles(combinedSolution);
-                System.out.println(combinedSolution);
+                addSolutionPuzzles(new Solution(combinedSolution));
+
+
                 if (bestSolution.getSolutionValue() > combinedSolution.getSolutionValue()) {
                     bestSolution = combinedSolution;
-                    updateSearchHistory(bestSolution);
+                    improvements++;
+                    XLData[improvements][0] = bestSolution.getSolutionValue();
+                    XLData[improvements][1] = System.currentTimeMillis() - startTime;
                 }
-                startAngle = -sweep(noOfSubProblems, miehleAlgorithm(bestSolution.getRoutes()), bestSolution, 0).get(startSubProblemIndex).getAngleToZero() + 3;
-                startSubProblemIndex+= (int)(Math.random() * 2 + 1);
-                if (startSubProblemIndex >= noOfSubProblems) {
-                    startSubProblemIndex = 0 ;
-                    startAngle = 0;
+
+                if (System.currentTimeMillis()-startTime>120000){
+                    break;
                 }
             }
             Collections.sort(solutionPuzzles);
             //2a
-            for (int iteration = 1; iteration <= 400; iteration++) {
+            for (int iteration = 1; iteration <= 100; iteration++) {
                 for (int i = L; i < solutionPuzzles.size(); i++) {
                     solutionPuzzles.remove(i);
                     i--;
@@ -275,6 +321,7 @@ public class TabuSearchApproach extends Heuristiken {
                     System.out.println(newSolution + " in Iteration " + iteration);
                 }
             }
+            solutionPuzzles.clear();
         }
         return bestSolution;
     }
@@ -345,39 +392,44 @@ public class TabuSearchApproach extends Heuristiken {
         }
     }
 
-
-    private Solution tabuSearch(ArrayList<Node> subproblemROutes, int noOfIterations, boolean useSH) {
+    //ALGORITHMUS 6
+    public Solution tabuSearch(ArrayList<Node> subproblemROutes, int noOfIterations, boolean useSH) {
         double kMax = 0;
         //Tabuduration nach Taillard 1993
-        int tabuDuration = (int) -Math.round(subproblemROutes.size() * (0.05 + 0.05 *Math.random() )); //0,1 kleinere Tabu Duration besser?
+        int tabuDuration = (int) -Math.round(subproblemROutes.size() * t  ); //0,1 kleinere Tabu Duration besser?
         //ACO zur Erzeugung von Startlösung um möglichst unterschiedliche Startlösungen für die Subprobleme zu erhalten
-        Solution startingSolution = new SbAS(problem, 0.5, 10000).ACO(subproblemROutes, 100, 10000, 5, 3, true);//100/4
-
-
-        //        // Eine Random 0,i,0 Route hinzufügen
-//        ArrayList<Route> savingsSolutionRoutes = startingSolution.getRoutes();
-//        int routeIndex = (int)Math.floor(Math.random()*savingsSolutionRoutes.size());
-//        //ersten Kunden aus der zufällig gewählten Route entfernen
-//        Node nodeToRemove =  savingsSolutionRoutes.get(routeIndex).getRoute().get(1);
-//        savingsSolutionRoutes.get(routeIndex).getRoute().remove(nodeToRemove);
-//        Route newRoute = new Route(savingsSolutionRoutes.size(), problem.getVehicleCapacity());
-//        newRoute.addCustomer(problem.getNodes()[0]);
-//        newRoute.addCustomer(nodeToRemove);
-//        newRoute.addCustomer(problem.getNodes()[0]);
-//        savingsSolutionRoutes.add(newRoute);
-
-
+        Solution startingSolution = new SbAS(problem, 0.5, 10000,averageDistance).ACO(subproblemROutes, subproblemROutes.size(), 10000, noOfSubACOAIterations, 3, true, randomAnt);//100/4 BUGABUSE
+//
 //        System.out.println("STARTWERT" + startingSolution);
         Solution bestSolution = new Solution(startingSolution);
         Solution neighborSolution = new Solution(startingSolution);
         LocalImprovement li;
         int[][] tabuList = new int[problem.numberOfCustomers + 1][problem.numberOfCustomers + 1];
         int[] frequency = new int[problem.numberOfCustomers + 1];
-        if (startingSolution.getRoutes().size() < 2) {
-            return startingSolution;
-        }
+//        if (startingSolution.getRoutes().size() < 2) {
+//            return startingSolution;
+//        }
+
         for (int it = 1; it < noOfIterations; it++) {
-            double penFac = 1 + 4 * Math.random();
+
+            //BRANCH AND BOUND USAGE BEI TEILLÖSUNGEN
+            if (bnbUsage == 2){
+            if (it % (noOfIterations-1) == 0) {
+                Solution bnbCombined = new Solution("BnBCombined");
+                for (Route r : bestSolution.getRoutes()) {
+                    BranchAndBoundTree searchTree = new BranchAndBoundTree(problem, Problem.calculateDistance(r) + 2, r.returnCustomers(), new Solution("native", r));
+                    searchTree.traverse(null);
+                    Solution sol = searchTree.solve();
+                    bnbCombined.addSubSolution(sol);
+
+                }
+                if (bnbCombined.getSolutionValue() < bestSolution.getSolutionValue()) {
+                    bestSolution = bnbCombined;
+                }
+            }
+        }
+
+            double penFac = (0.1 + 0.4 * Math.random())*divFac;
             // TAUSCHALTENATIVEN AUFSTELLEN
             ArrayList<Alternative> options = new ArrayList<>();
             for (int i = 0; i < neighborSolution.getRoutes().size() - 1; i++) {
@@ -390,7 +442,6 @@ public class TabuSearchApproach extends Heuristiken {
                             Node n1 = r1.getRoute().get(k);
                             Node n2 = r2.getRoute().get(l);
 
-
                             // (1-1) TAUSCH
                             Route newRoute1 = r1.swap(n2, n1, k);
                             Route newRoute2 = r2.swap(n1, n2, l);
@@ -402,78 +453,61 @@ public class TabuSearchApproach extends Heuristiken {
                                 Solution dummy = new Solution(neighborSolution);
                                 double frequencyNode = ((double) (frequency[n1.getIndex()] + frequency[n2.getIndex()]) / (2 * it));
                                 //STRAFTERM FÜR ZU OFT WECHSELNDE NODES
-                                double penalty = (frequencyNode * penFac * kMax * Math.pow(Math.abs(tabuDuration) * (subproblemROutes.size() -1) * 2, 0.5));
-                                if (tabuList[r2.routeIndex][n1.getIndex()] >= 0 && tabuList[r1.routeIndex][n1.getIndex()] >= 0) {
+                                double penalty = (frequencyNode * penFac * kMax * Math.pow(bestSolution.size() * (subproblemROutes.size() -1) * 2, 0.5));
+                                if (tabuList[r2.routeIndex][n1.getIndex()] >= 0 && tabuList[r1.routeIndex][n2.getIndex()] >= 0) {
                                     dummy.SetRoute(i, newRoute1);
                                     dummy.SetRoute(j, newRoute2);
-                                    li = new LocalImprovement(dummy, 45, problem, true);
-                                    dummy = li.impmrove();
-                                    int n1SuccessorIndex = newRoute2.getRoute().indexOf(n1) + 1;
-                                    int n1PredecessorIndex = newRoute2.getRoute().indexOf(n1) - 1;
-                                    int n2SuccessorIndex = newRoute1.getRoute().indexOf(n2) + 1;
-                                    int n2PredecessorIndex = newRoute1.getRoute().indexOf(n2) - 1;
-                                    if (n1PredecessorIndex < 0) {
-                                        System.out.println("TFG§");
-                                    }
 
-                                    double searchHistValue = searchHistory[n1.getIndex()][n1SuccessorIndex].getSearchHistoryValue() + searchHistory[n1PredecessorIndex][n1.getIndex()].getSearchHistoryValue()
-                                            + searchHistory[n2.getIndex()][n2SuccessorIndex].getSearchHistoryValue() + searchHistory[n2PredecessorIndex][n2.getIndex()].getSearchHistoryValue();
+
+                                    li = new LocalImprovement(dummy, 4, problem, true);
+                                    dummy = li.impmrove();
                                     if (Math.abs(dummy.getSolutionValue() - neighborSolution.getSolutionValue()) > kMax) {
                                         kMax = Math.abs(dummy.getSolutionValue() - neighborSolution.getSolutionValue());
                                     }
 
 
                                     double delta = (1d / (dummy.getSolutionValue() + penalty));
-                                    if (useSH) {
-                                        delta += searchHistValue;
-                                    }
                                     options.add(new Alternative(delta, dummy, n1, n2, i, j, "1-1"));
-                                    //ASPIRATIONSKRITERIUM: ZUG SEHR STARK GEWICHTEN DASS ER AUF JEDEN FALL GENWÄHLT WIRD
+                                    //ASPIRATIONSKRITERIUM
                                 } else if (dummy.getSolutionValue() < bestSolution.getSolutionValue()) {
-                                    options.add(new Alternative(1000000d / (dummy.getSolutionValue() + penalty), dummy, n1, n2, i, j, "1-1"));
+                                    options.add(new Alternative(1d / (dummy.getSolutionValue() + penalty), dummy, n1, n2, i, j, "1-1"));
                                 }
 
                             }
 
 
                             // (0-1) TAUSCH
-                            Route newRoute3 = r1.tabuRemove(n1);
-                            Route newRoute4 = r2.tabuAdd(n1);
-                            if (newRoute4 != null && !zeroOneDone) {
-                                if (newRoute4.getRoute().get(l).getIndex() == newRoute4.getRoute().get(l + 1).getIndex()) {
-                                    System.out.println("FALSCH");
-                                }
-
-                                Solution dummy = new Solution(neighborSolution);
-                                //STRAFTERM FÜR ZU OFT WECHSELNDE NODES
-                                double penalty = ((double) (frequency[n1.getIndex()]) / it) * penFac * kMax * Math.pow(Math.abs(tabuDuration) * (subproblemROutes.size() -1) * 2 , 0.5);
-                                if (tabuList[r2.routeIndex][n1.getIndex()] >= 0) {
-                                    zeroOneDone = true;
-                                    dummy.SetRoute(i, newRoute3);
-                                    dummy.SetRoute(j, newRoute4);
-                                    li = new LocalImprovement(dummy, 7, problem, true);
-                                    dummy = li.impmrove();
-
-                                    int n1SuccessorIndex = newRoute4.getRoute().indexOf(n1) + 1;
-                                    int n1PredecessorIndex = newRoute4.getRoute().indexOf(n1) - 1;
-
-                                    double searchHistValue = searchHistory[n1.getIndex()][n1SuccessorIndex].getSearchHistoryValue() + searchHistory[n1PredecessorIndex][n1.getIndex()].getSearchHistoryValue();
-
-                                    double delta = (1d / (dummy.getSolutionValue() + penalty));
-                                    if (useSH) {
-                                        delta += searchHistValue;
-                                    }
-                                    if (Math.abs(dummy.getSolutionValue() - neighborSolution.getSolutionValue()) > kMax) {
-                                        kMax = Math.abs(dummy.getSolutionValue() - neighborSolution.getSolutionValue());
+                            if(l==1) {
+                                Route newRoute3 = r1.tabuRemove(n1);
+                                Route newRoute4 = r2.tabuAdd(n1);
+                                if (newRoute4 != null && !zeroOneDone) {
+                                    if (newRoute4.getRoute().get(l).getIndex() == newRoute4.getRoute().get(l + 1).getIndex()) {
+                                        System.out.println("FALSCH");
                                     }
 
+                                    Solution dummy = new Solution(neighborSolution);
+                                    //STRAFTERM FÜR ZU OFT WECHSELNDE NODES
+                                    double penalty = ((double) (frequency[n1.getIndex()]) / it) * penFac * kMax * Math.pow(bestSolution.size() * (subproblemROutes.size() - 1) * 2, 0.5);
+                                    if (tabuList[r2.routeIndex][n1.getIndex()] >= 0) {
+                                        zeroOneDone = true;
+                                        dummy.SetRoute(i, newRoute3);
+                                        dummy.SetRoute(j, newRoute4);
+                                        li = new LocalImprovement(dummy, 4, problem, true);
+                                        dummy = li.impmrove();
 
-                                    options.add(new Alternative(delta, dummy, n1, null, i, j, "0-1"));
+                                        double delta = (1d / (dummy.getSolutionValue() + penalty));
+                                        if (Math.abs(dummy.getSolutionValue() - neighborSolution.getSolutionValue()) > kMax) {
+                                            kMax = Math.abs(dummy.getSolutionValue() - neighborSolution.getSolutionValue());
+                                        }
 
-                                }
-                                //ASPIRATIONSKRITERIUM
-                                else if (dummy.getSolutionValue() < bestSolution.getSolutionValue()) {
-                                    options.add(new Alternative(1000000d / (dummy.getSolutionValue() + penalty), dummy, n1, null, i, j, "0-1"));
+
+                                        options.add(new Alternative(delta, dummy, n1, null, i, j, "0-1"));
+
+                                    }
+                                    //ASPIRATIONSKRITERIUM
+                                    else if (dummy.getSolutionValue() < bestSolution.getSolutionValue()) {
+                                        options.add(new Alternative(1d / (dummy.getSolutionValue() + penalty), dummy, n1, null, i, j, "0-1"));
+                                    }
                                 }
                             }
                         }
@@ -502,17 +536,22 @@ public class TabuSearchApproach extends Heuristiken {
 
                 double monteCarlo = Math.random();
                 double zetaprob;
-                Alternative candidate = null;
-                int candidateID = 0;
-                for (int i = 0; i < options.size(); i++) {
 
-                    zetaprob = options.get(i).getProbability();
-                    if (zetaprob > monteCarlo) {
-                        candidate = options.get(i);
-                        candidateID = i;
-                        break;
-                    }
+                Alternative candidate = null;
+                if (options.size()>=1){
+                    candidate = options.get(0);
                 }
+                int candidateID = 0;
+
+//                for (int i = 0; i < options.size(); i++) {
+//
+//                    zetaprob = options.get(i).getProbability();
+//                    if (zetaprob > monteCarlo) {
+//                        candidate = options.get(i);
+//                        candidateID = i;
+//                        break;
+//                    }
+//                }
 
                 if (candidate != null) {
                     //FALLS DER AUSGEWÄHLTE TAUSCHZUG AUS EINEM 1 1 MOVE RESULTIERT
@@ -635,12 +674,18 @@ public class TabuSearchApproach extends Heuristiken {
 
     public class Subproblems extends ArrayList<Node> implements Comparable<Subproblems> {
         private ArrayList<Node> customers = new ArrayList<>();
+        private ArrayList<Route> routes = new ArrayList<>();
         private double angleToZero;
         private int index;
 
         public Subproblems(ArrayList<Node> customers, double angleToZero) {
             this.customers.addAll(customers);
             this.angleToZero = angleToZero;
+        }
+
+
+        public void addRoute (Route r){
+            routes.add(r);
         }
 
         public Subproblems(double angleToZero) {
@@ -678,7 +723,7 @@ public class TabuSearchApproach extends Heuristiken {
             return angleToZero;
         }
 
-        public ArrayList<Node> getRoutes() {
+        public ArrayList<Node> getNodes() {
             return customers;
         }
 
@@ -710,10 +755,15 @@ public class TabuSearchApproach extends Heuristiken {
             customers.add(index, element);
         }
 
+        public ArrayList<Route> getRoute(){
+            return routes;
+        }
+
     }
 
 
-    private ArrayList<Subproblems> sweep(int numOfSubProblems, ArrayList<Node> cog, Solution solution, double start) {
+
+    private ArrayList<Subproblems> sweep(int numOfSubProblems, ArrayList<Node> cog, Solution solution, double start, int cakePieces) {
         ArrayList<Subproblems> subProblems = new ArrayList<>();
         ArrayList<Subproblems> cogs = new ArrayList<>();
 
@@ -764,6 +814,7 @@ public class TabuSearchApproach extends Heuristiken {
             alpha = alpha + start;
             //Hilfsklasse mit Winkel zw sweep Start und Center of gravity + den zugehörigen Kunden zum CoG
             cogs.add(new Subproblems(solution.getRoutes().get(counter).getRoute(), alpha));
+            cogs.get(counter).addRoute(solution.getRoutes().get(counter));
             counter++;
 
         }
@@ -773,28 +824,57 @@ public class TabuSearchApproach extends Heuristiken {
             cogs.get(i).setIndex(i);
         }
 
-        int routesPerSubProblem = (cogs.size() / numOfSubProblems);
+        int routesPerSubProblem = 1 ;// (cogs.size() / numOfSubProblems); 1
+        int n_extra = cogs.size() - numOfSubProblems; //* routesPerSubProblem; 2
 
-        //wenn zu viele Routen pro subproblem --> gesamtproblem ausgeben
-        if (routesPerSubProblem == 0) {
-            for (Subproblems s : cogs) {
-                subProblems.add(s);
+        if (cakePieces != -1){
+            routesPerSubProblem = (cogs.size() / cakePieces);
+            n_extra = cogs.size() - cakePieces * routesPerSubProblem;
+            int noOfSubset = 1;
+            int cogsInSubset = 0;
+            Subproblems sP = new Subproblems(0);
+            for (int l = 0; l< cogs.size();l++) {
+                Subproblems s = cogs.get(l);
+                int cogsToAdd = routesPerSubProblem;
+                if (noOfSubset <= n_extra) {  //if (noOfSubset <= n_extra)
+                    cogsToAdd = routesPerSubProblem + 1; //routesPerSubProblem + 1
+                }
+                if (cogsInSubset < cogsToAdd) {
+                    sP.addAll(s.getNodes());
+                    sP.addRoute(s.getRoute().get(0));
+                    cogsInSubset++;
+                }
+                if (cogsInSubset == cogsToAdd) {
+                    for (int i = 1; i < sP.customers.size(); i++) {
+                        Node n = sP.customers.get(i);
+                        if (n.getIndex() == 0) {
+                            sP.customers.remove(i);
+                            i--;
+                        }
+                    }
+                    subProblems.add(sP);
+                    sP = new Subproblems(s.angleToZero);
+                    noOfSubset++;
+                    cogsInSubset = 0;
+                }
             }
             return subProblems;
+
         }
 
-        int n_extra = cogs.size() - numOfSubProblems * routesPerSubProblem;
 
         int noOfSubset = 1;
         int cogsInSubset = 0;
         Subproblems sP = new Subproblems(0);
-        for (Subproblems s : cogs) {
+        for (int l = 0; l< cogs.size();l++) {
+            Subproblems s = cogs.get(l);
             int cogsToAdd = routesPerSubProblem;
-            if (noOfSubset <= n_extra) {
-                cogsToAdd = routesPerSubProblem + 1;
+            if (noOfSubset == 1) {  //if (noOfSubset <= n_extra)
+                cogsToAdd = routesPerSubProblem + n_extra; //routesPerSubProblem + 1
             }
             if (cogsInSubset < cogsToAdd) {
-                sP.addAll(s.getRoutes());
+                sP.addAll(s.getNodes());
+                sP.addRoute(s.getRoute().get(0));
                 cogsInSubset++;
             }
             if (cogsInSubset == cogsToAdd) {
@@ -806,14 +886,19 @@ public class TabuSearchApproach extends Heuristiken {
                     }
                 }
                 sP.angleToZero = s.angleToZero;
+                if (noOfSubset == 1){
+                    sP.angleToZero = cogs.get(l-1).angleToZero;
+                }
                 subProblems.add(sP);
                 sP = new Subproblems(s.angleToZero);
                 noOfSubset++;
                 cogsInSubset = 0;
             }
         }
-        Collections.sort(subProblems);
         return subProblems;
 
     }
+
+
+
 }

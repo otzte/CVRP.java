@@ -46,4 +46,8 @@ public class Zeta implements Comparable<Zeta>{
     public String toString() {
         return "Customer " + customer1.getIndex() + " combined with Customer " + customer2.getIndex() + " is a saving of " + value;
     }
+
+    public boolean contains (Node n){
+        return (n.getIndex() == customer1.getIndex() || n.getIndex() == customer2.getIndex());
+    }
 }

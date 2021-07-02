@@ -1,0 +1,23 @@
+<component name="libraryTable">
+  <library name="commons-codec-1.15">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/commons-codec-1.15.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/commons-collections4-4.4.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/commons-compress-1.20.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/commons-math3-3.6.1.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/curvesapi-1.06.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/poi-5.0.0.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/poi-examples-5.0.0.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/poi-excelant-5.0.0.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/poi-integration-5.0.0.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/poi-ooxml-5.0.0.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/poi-ooxml-full-5.0.0.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/poi-ooxml-lite-5.0.0.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/poi-scratchpad-5.0.0.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/SparseBitSet-1.2.jar!/" />
+      <root url="jar://$USER_HOME$/Downloads/poi-bin-5.0.0-20210120/poi-5.0.0/all/xmlbeans-4.0.0.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

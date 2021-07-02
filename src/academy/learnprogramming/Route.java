@@ -26,9 +26,7 @@ public class Route {
         this.vehicleCapacity = route.vehicleCapacity;
     }
 
-    public void setRouteIndex(int routeIndex) {
-        this.routeIndex = routeIndex;
-    }
+
 
     public Route(ArrayList<Node> route, int vehicleCapacity, int demand, int index){
         this.route = route;
@@ -37,7 +35,9 @@ public class Route {
         this.routeIndex = index;
     }
 
-
+    public void setRouteIndex(int routeIndex) {
+        this.routeIndex = routeIndex;
+    }
 
     // wird ausgeführt wenn Kunde der Route hinzugefügt wird
     public void addCustomer(Node node){
@@ -56,6 +56,14 @@ public class Route {
         if (node.getIndex()>0) {
             node.makeDelivery();
         }
+    }
+
+    public boolean remove(Node n){
+        if(this.route.remove(n)){
+            this.currentDemand -= n.getDemand();
+            return true;
+        }
+        return false;
     }
 
     class Saving implements Comparable<Saving>{
@@ -84,6 +92,21 @@ public class Route {
             }
             return -1;
         }
+    }
+
+    public int size(){
+        return route.size();
+    }
+
+    public Node getNode(int index) {
+        return route.get(index);
+    }
+
+    public ArrayList<Node> returnCustomers(){
+        ArrayList<Node> customers = new ArrayList<>(route);
+        customers.remove(route.size()-1);
+        customers.remove(0);
+        return customers;
     }
 
 
@@ -190,6 +213,8 @@ public class Route {
             return newRoute;
         }
     }
+
+
 
     private void removeDepot(boolean atStart){
         if (atStart){

@@ -1,92 +1,63 @@
 package academy.learnprogramming;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class BranchAndBoundNode {
+public class BranchAndBoundNode implements Comparable<BranchAndBoundNode> {
 
     //verfügbaren Nodes auf index reduziert
-    ArrayList<Integer> availableSuccessors;
-    Map<Integer, BranchAndBoundNode> children = new HashMap<>();
+    ArrayList<Node> availableSuccessors;
+    ArrayList<BranchAndBoundNode> children = new ArrayList<>();
     static int nodeNumber;
-    static double UB = Solution.bestSolutionValue;
+    static double UB;
     int index;
     int xPos;
     int yPos;
-    int demand;
     int rank;
     Route fixatedRoute;
-    ArrayList<Route> finishedRoutes = new ArrayList<>();
     boolean finished = false;
-    Node[] originalNodes = Problem.nodes;
     double LB;
     double solutionValue;
 
-    public BranchAndBoundNode(ArrayList<Integer> references, int index, int xPos, int yPos, Route fixatedRoute, int demand, ArrayList<Route> finishedRoutes) {
-        this.availableSuccessors = references;
-        this.index = index;
+    public BranchAndBoundNode(ArrayList<Node> availableSuccessors, int xPos, int yPos, Route fixatedRoute) {
+        this.availableSuccessors = availableSuccessors;
         this.xPos = xPos;
         this.yPos = yPos;
         this.fixatedRoute = fixatedRoute;
-        this.demand = demand;
-        if (finishedRoutes != null) {
-            this.finishedRoutes = finishedRoutes;
-        }
         this.LB = calculateLowerBound();
-        nodeNumber ++;
+//        System.out.println("AVAIL SUCC " + availableSuccessors.size());
+//        System.out.println("LB = " + LB);
+//        System.out.println("UB = " + UB);
     }
 
-    public Map<Integer, BranchAndBoundNode> createSubNodes() {
-        //es werden nur kinder erzeugt, wenn lb < ub
-        if (this.LB < UB ) {
-            //in availableSuccessors sind die Kunden, die noch besucht werden müssen
-            for (Integer childIndex : availableSuccessors) {
-                boolean childFinished = false;
-                ArrayList<Integer> childsAvailableSuccessors = new ArrayList<>(availableSuccessors);
-                ArrayList<Route> finishedRouteOfChild = new ArrayList<>(finishedRoutes);
-                //depot darf nicht entfernt werden, wird ein Kunde besucht, wird er aus availableSuccessors removed. Depot kann mehrfach besucht werden.
-                Route newRoute = new Route(this.fixatedRoute);
-                newRoute.addCustomer(originalNodes[childIndex]);
-                //keine depot zu depot Route zulassen
-                if (this.index == 0 && childIndex == 0) {
-                    continue;
-                } else if (childIndex != 0) {
-                    //nur removen wenn rein passt
-                    childsAvailableSuccessors.remove(childIndex);
-                } else {
-                    //falls depot ausgehend von kunden angefahren wird
-                    finishedRouteOfChild.add(newRoute);
-                    if (childsAvailableSuccessors.size()==1){
-                        childFinished = true;
-                    }
-                    int routeIndex = newRoute.routeIndex;
-                    int vehCapacity = newRoute.vehicleCapacity;
-                    // bisherige route abschließen und den fertigen routen anheften
-//                newRoute.addCustomer(originalNodes[0]);
-                    // neue route eröffnen die im depot startet
-                    newRoute = new Route(routeIndex + 1, vehCapacity);
-                    newRoute.addCustomer(originalNodes[0]);
-                }
-                Node childNode = originalNodes[childIndex];
+    public void setRank(int rank) {
+        this.rank = rank;
+    }
 
-                //erstes Auslotungskriterium: nur falls die Kapazität des Fahrzeugs ausreicht um den zusätzlichen Kunden zu beliefern wird das Kind erzeugt
-                if (this.demand + childNode.getDemand() < newRoute.vehicleCapacity) {
-                    int demand = 0;
-                    if (this.index != 0){
-                        demand = this.demand;
-                    }
-                    BranchAndBoundNode bnbChild = new BranchAndBoundNode(childsAvailableSuccessors, childIndex, childNode.getxPos(), childNode.getyPos(), newRoute, demand + childNode.getDemand(), finishedRouteOfChild);
-                    children.put(childIndex, bnbChild);
-                    bnbChild.finished = childFinished;
+    public ArrayList<BranchAndBoundNode> createSubNodes() {
+        ArrayList<BranchAndBoundNode> subNodes = new ArrayList<>();
+        //es werden nur kinder erzeugt, wenn lb < ub
+        if (this.LB < UB) {
+            //in availableSuccessors sind die Kunden, die noch besucht werden müssen
+            for (Node child : availableSuccessors) {
+                ArrayList<Node> subsAvailableSuccessors = new ArrayList<>(availableSuccessors);
+                subsAvailableSuccessors.remove(child);
+                Route subsRoute = new Route(fixatedRoute);
+                subsRoute.addCustomer(child);
+                BranchAndBoundNode subNode = new BranchAndBoundNode(subsAvailableSuccessors, child.getxPos(), child.getyPos(), subsRoute);
+                subNodes.add(subNode);
+                if (subsAvailableSuccessors.size() == 0) {
+                    subNode.finished = true;
                 }
             }
-            return new HashMap<>(children);
+
         }
-        return new HashMap<>();
+        return subNodes;
     }
 
-    public Map<Integer, BranchAndBoundNode> getChildren() {
+    public ArrayList<BranchAndBoundNode> getChildren() {
         return children;
     }
 
@@ -94,84 +65,154 @@ public class BranchAndBoundNode {
         return fixatedRoute;
     }
 
-    public boolean allCustomersServed() {
-        boolean allServed = true;
-        for (Node node : originalNodes) {
-            if (node.getIndex() == 0) {
-                continue;
-            }
-            if (!node.isServed()) {
-                allServed = false;
-            }
-        }
-        return allServed;
-    }
+//    public boolean allCustomersServed() {
+//        boolean allServed = true;
+//        for (Node node : originalNodes) {
+//            if (node.getIndex() == 0) {
+//                continue;
+//            }
+//            if (!node.isServed()) {
+//                allServed = false;
+//            }
+//        }
+//        return allServed;
+//    }
 
-    private double calculateLowerBound() {
+    public double calculateLowerBound() {
         return routeFertigMachen();
     }  // + ClusterKruskal
 
     private double routeFertigMachen() {
         //Term für Lower Bound aus Erweiterung der fixierten Route
-        ArrayList<Node> fixatedTerm = new ArrayList<>(fixatedRoute.getRoute());
-        ArrayList<Node> availableNodes = getUnservedNodes();
-        //Zwischenspeicher der Kunden, die beim Kruskal hinzugefügt werden
-        ArrayList<Node> undoDelivery = new ArrayList<>();
-        double lowerBoundFixated = getFixatedLength(fixatedTerm);
-        int demand = this.demand;
-        //solange noch mehr Nodes als das depot zur verfügung stehen
-        while (availableNodes.size()>1 && spaceAvailable(demand)) {
-            double minDistance = Integer.MAX_VALUE;
+        double lowerBoundFixated = Problem.calculateDistance(fixatedRoute);
 
-            int end = -1;
-            for (Node fixated : fixatedTerm) {
-                for (Node available : availableNodes) {
-                    //depot soll nicht beliefert werden, d.h. es bleibt für immer in der Liste availableNodes
-                    if (available.getIndex() == 0 ){
-                        continue;
-                    }
-                    double distance = Problem.distances[fixated.getIndex()][available.getIndex()];
-                    if (minDistance > distance) {
-                        minDistance = distance;
-                        end = available.getIndex();
+        //Kruskal
+        ArrayList<KruskalEdge> kruskalEdges = new ArrayList<>();
+        for (int i = 0; i < availableSuccessors.size(); i++) {
+            Node ni = availableSuccessors.get(i);
+            for (int j = i + 1; j < availableSuccessors.size(); j++) {
+                Node nj = availableSuccessors.get(j);
+                kruskalEdges.add(new KruskalEdge(ni, nj, Problem.distances[ni.getIndex()][nj.getIndex()]));
+            }
+        }
+        Collections.sort(kruskalEdges);
+
+        ArrayList<KruskalEdge> minimalSpanningTree = new ArrayList<>();
+        for (int i = 0; i < kruskalEdges.size(); i++) {
+            KruskalEdge newEdge = kruskalEdges.get(i);
+            if (noCircle(minimalSpanningTree, newEdge)) {
+                for (KruskalEdge e : minimalSpanningTree) {
+                    if (newEdge.hasSameNode(e)) {
+                        newEdge.connect(e);
                     }
                 }
-            }
-            //Kruskal Werte
-            lowerBoundFixated += minDistance;
-            demand += originalNodes[end].getDemand();
+                for (KruskalEdge e : newEdge.connectedWith) {
+                    e.connectedWith = kruskalEdges.get(i).connectedWith;
+                }
+                    minimalSpanningTree.add(kruskalEdges.get(i));
 
-
-            originalNodes[end].makeDelivery();
-            fixatedTerm.add(originalNodes[end]);
-            availableNodes.remove(originalNodes[end]);
-            if (!undoDelivery.contains(originalNodes[end])) {
-                undoDelivery.add(originalNodes[end]);
+                if (minimalSpanningTree.size() >= availableSuccessors.size() - 1) {
+                    break;
+                }
             }
 
         }
-        //plus kürzeste Verbindung der Nodes zum depot
-        double shortestDistanceToDepot = Integer.MAX_VALUE;
-        for (Node node: fixatedTerm){
-            if (node.getIndex() == 0 ){
-                continue;
-            }
-            double distance = Problem.distances[0][node.getIndex()];
-            if (shortestDistanceToDepot>distance){
-                shortestDistanceToDepot = distance;
+//        ArrayList<Route> spanningTreeEdges = new ArrayList<>();
+//        for (KruskalEdge e : minimalSpanningTree) {
+//            ArrayList<Node> edge = new ArrayList<>();
+//            edge.add(e.i);
+//            edge.add(e.j);
+//            spanningTreeEdges.add(new Route(edge, 20, 20, 10));
+//        }
+//        Draw.drawRoutes(spanningTreeEdges,"SpanningTree",1000);
+//        System.out.println(minimalSpanningTree.size());
+
+        if (availableSuccessors.size()>1) {
+            for (KruskalEdge e : minimalSpanningTree) {
+                lowerBoundFixated += e.cij;
             }
         }
-        lowerBoundFixated += shortestDistanceToDepot;
 
 
+        // kürzeste Kante zwischen anfang fixierter Route und Spannbaum
+        double minStart = Integer.MAX_VALUE;
+        double minEnd = Integer.MAX_VALUE;
+        Node lastCustomer = fixatedRoute.getNode(fixatedRoute.size() - 1);
+        for (Node n : availableSuccessors) {
+            if (minStart > Problem.distances[0][n.getIndex()]) {
+                minStart = Problem.distances[0][n.getIndex()];
+            }
+            if (minEnd > Problem.distances[lastCustomer.getIndex()][n.getIndex()]) {
+                minEnd = Problem.distances[lastCustomer.getIndex()][n.getIndex()];
+            }
+        }
 
-
-        //weil die Kruskal-Kunden in Wirklichkeit nicht beliefert wurden muss der Hilfseintrag wieder Rückgängig gemacht werden
-        for (Node node : undoDelivery) {
-            node.undoDelivery();
+        if (fixatedRoute.size()>1) {
+            lowerBoundFixated += minEnd + minStart;
         }
 
         return lowerBoundFixated;
+    }
+
+    private boolean noCircle(ArrayList<KruskalEdge> minimalSpanningTree, KruskalEdge edge) {
+        for (KruskalEdge e : minimalSpanningTree) {
+            if (e.hasTwoIntersections(edge)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+
+    class KruskalEdge implements Comparable<KruskalEdge> {
+        Node i;
+        Node j;
+        double cij;
+        ArrayList<KruskalEdge> connectedWith = new ArrayList<>();
+
+        public KruskalEdge(Node i, Node j, double cij) {
+            this.i = i;
+            this.j = j;
+            this.cij = cij;
+            connectedWith.add(this);
+        }
+
+        @Override
+        public int compareTo(KruskalEdge o) {
+            return Double.compare(this.cij, o.cij);
+        }
+
+        private boolean hasSameNode(KruskalEdge e) {
+            return this.i.equals(e.i) || this.j.equals(e.i) || this.i.equals(e.j) || this.j.equals(e.j);
+        }
+
+        private boolean hasSameNode(Node n) {
+            return this.i.equals(n) || this.j.equals(n);
+        }
+
+        private void connect(KruskalEdge e) {
+            connectedWith.addAll(e.connectedWith);
+        }
+
+        private boolean hasTwoIntersections(KruskalEdge e) {
+            boolean i1 = false;
+            boolean i2 = false;
+
+            for (KruskalEdge thisEdges : connectedWith) {
+                if (thisEdges.hasSameNode(e.i)) {
+                    i1 = true;
+                }
+                if (thisEdges.hasSameNode(e.j)) {
+                    i2 = true;
+                }
+            }
+            return i1 & i2;
+        }
+
+        @Override
+        public String toString() {
+            return " i: " + i.getIndex() + " j: " + j.getIndex();
+        }
     }
 
     private double getFixatedLength(ArrayList<Node> fixRoute) {
@@ -188,37 +229,44 @@ public class BranchAndBoundNode {
         return demand < Problem.vehicleCapacity;
     }
 
-    private ArrayList<Node> getUnservedNodes() {
-        ArrayList<Node> unservedCustomers = new ArrayList<>();
-        for (Integer customerId : availableSuccessors) {
-            unservedCustomers.add(originalNodes[customerId]);
-        }
-        return unservedCustomers;
-    }
+//    private ArrayList<Node> getUnservedNodes() {
+//        ArrayList<Node> unservedCustomers = new ArrayList<>();
+//        for (Integer customerId : availableSuccessors) {
+//            unservedCustomers.add(originalNodes[customerId]);
+//        }
+//        return unservedCustomers;
+//    }
 
     public double getLB() {
         return LB;
     }
 
-    public ArrayList<Route> getFinishedRoutes() {
-        return new ArrayList<Route>(finishedRoutes);
-    }
+//    public ArrayList<Route> getFinishedRoutes() {
+//        return new ArrayList<Route>(finishedRoutes);
+//    }
 
     public boolean isFinished() {
         return finished;
     }
 
-    public double calculateSolutionValue(){
-        double solutionvalue = 0;
-            for (Route route: finishedRoutes){
-                solutionvalue += getFixatedLength(route.getRoute());
-            }
-            this.solutionValue = solutionvalue;
-            return solutionvalue;
-
+    public double calculateSolutionValue() {
+        this.solutionValue = Problem.calculateDistance(fixatedRoute);
+        return this.solutionValue;
     }
 
     public double getSolutionValue() {
         return solutionValue;
+    }
+
+    @Override
+    public int compareTo(BranchAndBoundNode o) {
+        return Double.compare(this.LB, o.LB);
+    }
+
+    @Override
+    public String toString() {
+        return "BranchAndBoundNode{" +
+                "LB=" + LB +
+                '}';
     }
 }
