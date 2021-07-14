@@ -12,7 +12,7 @@ public class SbAS extends Heuristiken {
     private final double savingsSolutionValue;
     private final double startingPheromone;
     private double savings[][];
-    private final int numOfSubProblems = 4; //varainte b 10
+    private final int numOfSubProblems = 8; //varainte b 10
     private double averageDistance;
 
     public SbAS(Problem problem, double startingPheromone, double sv, double averageDistance) {

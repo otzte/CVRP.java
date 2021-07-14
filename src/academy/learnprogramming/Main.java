@@ -5,82 +5,73 @@ import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Random;
 
 public class Main {
-	
 
-	//Instanzen werden bei den zwei Metaheuristiken (TS und SbAS) über die createExcel - Funktion gelöst
+
+    //Instanzen werden bei den zwei Metaheuristiken (TS und SbAS) über die createExcel - Funktion gelöst
     public static void main(String[] args) throws IOException {
-		int numberOfCustomers=200;
-		int numberOfVehicles = 10;
-		int vehicleCapacity =  90;
-	    int depotXPos = 50;
-		int depotYPos = 50;
-		int seed = 121212;
+        int numberOfCustomers = 200;
+        int numberOfVehicles = 10;
+        int vehicleCapacity = 90;
+        int depotXPos = 50;
+        int depotYPos = 50;
+        int seed = 121212;
 
 
+        //Create Problem Instance
+        Problem CVRP = new Problem(numberOfCustomers, numberOfVehicles, vehicleCapacity, depotXPos, depotYPos, seed);
+        ArrayList<Node> customers = new ArrayList<>(Arrays.asList(CVRP.getNodes()));
+        customers.remove(0);
 
 
+        //NNH
+        NearestNeighborHeuristik NNH = new NearestNeighborHeuristik(CVRP);
 
-		//Create Problem Instance
-		Problem CVRP = new Problem(numberOfCustomers,numberOfVehicles,vehicleCapacity,depotXPos,depotYPos,seed);
-		ArrayList<Node> customers = new ArrayList<>(Arrays.asList(CVRP.getNodes()));
-		customers.remove(0);
+        Solution solution = NNH.solve();
 
+        System.out.println("\n\n" + "\t Routen: ");
+        for (Route route : solution.routes) {
+            System.out.println("\n");
+            for (Node node : route.getRoute()) {
+                System.out.print(node.getIndex() + " - ");
+            }
+        }
+        System.out.println("\n \t Zielfunktionswert: " + solution.getSolutionValue());
 
-
-
-
-		//NNH
-		NearestNeighborHeuristik NNH = new NearestNeighborHeuristik(CVRP);
-
-		Solution solution =  NNH.solve();
-
-		System.out.println("\n\n" + "\t Routen: ");
-		for (Route route: solution.routes){
-			System.out.println("\n");
-			for(Node node: route.getRoute()){
-				System.out.print(node.getIndex() + " - ");
-			}
-		}
-		System.out.println("\n \t Zielfunktionswert: " + solution.getSolutionValue());
-
-		Draw.drawRoutes(solution.routes, "Nearest Neighbor Heuristik",solution.getSolutionValue());
+        Draw.drawRoutes(solution.routes, "Nearest Neighbor Heuristik", solution.getSolutionValue());
 
 
-		//SAVINGS
+        //SAVINGS
 
-		Problem CVRP2 = new Problem(numberOfCustomers,numberOfVehicles,vehicleCapacity,depotXPos,depotYPos,seed);
-		ClarkeWrightSavings savings = new ClarkeWrightSavings(CVRP2);
-		double startTime = System.currentTimeMillis();
-		Solution savingsSolution = savings.solve();
-		LocalImprovement localImprovement = new LocalImprovement(solution,45,CVRP);
+        Problem CVRP2 = new Problem(numberOfCustomers, numberOfVehicles, vehicleCapacity, depotXPos, depotYPos, seed);
+        ClarkeWrightSavings savings = new ClarkeWrightSavings(CVRP2);
+        double startTime = System.currentTimeMillis();
+        Solution savingsSolution = savings.solve();
+        LocalImprovement localImprovement = new LocalImprovement(solution, 45, CVRP);
 //		localImprovement.impmrove();
-		System.out.println("Savings Heuristik Lösung:" + savingsSolution.getSolutionValue() + " nach " + (System.currentTimeMillis()-startTime));
+        System.out.println("Savings Heuristik Lösung:" + savingsSolution.getSolutionValue() + " nach " + (System.currentTimeMillis() - startTime));
 
-		Draw.drawRoutes(savingsSolution.routes, "Clarke Wright Savings",savingsSolution.getSolutionValue() );
-
-
-
-		//DURCHSCHNITTLICHE KANTENLÄNGE SAVINGS HEURISTIK FÜR THRESHOLD T
-		int noOfUsedEdges = 0;
-		for (Route r :savingsSolution.getRoutes()){
-			for (Node n: r.getRoute()){
-				noOfUsedEdges ++;
-			}
-			noOfUsedEdges--;
-		}
-		double averageDistance = 16 + savingsSolution.getSolutionValue()/noOfUsedEdges;
+        Draw.drawRoutes(savingsSolution.routes, "Clarke Wright Savings", savingsSolution.getSolutionValue());
 
 
-		//BRANCH AND BOUND
+        //DURCHSCHNITTLICHE KANTENLÄNGE SAVINGS HEURISTIK FÜR THRESHOLD T
+        int noOfUsedEdges = 0;
+        for (Route r : savingsSolution.getRoutes()) {
+            for (Node n : r.getRoute()) {
+                noOfUsedEdges++;
+            }
+            noOfUsedEdges--;
+        }
+        double averageDistance = 16 + savingsSolution.getSolutionValue() / noOfUsedEdges;
+
+
+        //BRANCH AND BOUND
 //		Tree mit Root erstellen
 //		BranchAndBoundTree searchTree = new BranchAndBoundTree(CVRP,savingsSolution.getSolutionValue(),customers);
 //		System.out.println( "LB = " + searchTree.getRoot().calculateLowerBound());
@@ -90,75 +81,46 @@ public class Main {
 //		Draw.drawRoutes(bnb.getRoutes(), "Branch and Bound",bnb.getSolutionValue());
 
 
-		//SBAS
-//		XSSFWorkbook workbookSbas = new XSSFWorkbook();
-//		XSSFSheet sheetSbas = workbookSbas.createSheet(Integer.toString(seed));
-
-		Solution best = savingsSolution;
-//		for (int i=0;i<10;i++) {
-			SbAS sbAS = new SbAS(CVRP2,(double) 1/savingsSolution.getRoutes().size(),savingsSolution.getSolutionValue(),averageDistance);
-//			createExcel("SbAS",sbAS,seed,savingsSolution,CVRP2);
-
-//			Solution sbasS = sbAS.solve();
-//			if (sbasS.getSolutionValue()<best.getSolutionValue()){
-//				best = sbasS;
-//			}
-//
-//			int rows = 210;
-//			int cols = 2;
-//
-//
-//			int rw = 0;
-//			int max = 20 + i*20;
-//			for (int r=i*20; r<max;r++){
-//				XSSFRow row = sheetSbas.createRow(r);
-//				for(int c=0;c<cols;c++){
-//					XSSFCell cell = row.createCell(c);
-//					double value = sbAS.XLData[rw][c];
-//					cell.setCellValue(value);
-//				}
-//				rw++;
-//			}
-//
-//			String filePath = ".\\Datafiles\\SbAS.xlsx";
-//			FileOutputStream outStream = new FileOutputStream(filePath);
-//			workbookSbas.write(outStream);
-//			outStream.close();
-//		}
-//		Draw.drawRoutes(best.getRoutes(), "SbAS",best.getSolutionValue());
+        //SBAS
 
 
-		//---------------------TABU SEARCH--------------------------------
-		//Parameter
-		Random random = new Random();
-		double[][] data = new double[1001][10];
-		for (int i=0;i<1;i++) {
-			double t = 0.3; //0.01 + Math.random() * 2;
-			data[i][0] =t;
-			double divFac = 20; // Math.random() * 100;
-			data[i][1] = divFac;
-			int noOfTabuIterations = 20; // (int) (10 + Math.random() * 140);
-			data[i][2]= noOfTabuIterations;
-			int noOfGlobalACOAIterations = 5; // (int) (1 + Math.random() * 5);
-			data[i][3] = noOfGlobalACOAIterations;
-			int noOfSubACOAIterations = 6;//(int) (1 + Math.random() * 9);
-			data[i][4] = noOfSubACOAIterations;
-			int cakePieces = 4;//(int) (3 + Math.random() * 3); //bestimmt die größe der n_r,s,10 Subprobleme
-			data[i][5] = cakePieces;
-			double randomAnt = 1; // Math.random();
-			data[i][6] = randomAnt;
-			double sweepAngle = -0.15; // Math.random()*2-1; // random Sweep oder konstanter Startwinkel: <0 - random, >0 - Range zwischen 5° und 150°
-			data[i][7] = sweepAngle;
-			int bnbUsage = 0; // random.nextInt(3); // 0 - kein BnB, 1  - im Dekompositionsansatz, 2 - in der Tabususche
-			data[i][8] = bnbUsage;
+        Solution best = savingsSolution;
 
-			TabuSearchApproach ts = new TabuSearchApproach(CVRP2, savingsSolution, t, divFac, noOfTabuIterations, noOfGlobalACOAIterations,
-					noOfSubACOAIterations, cakePieces,randomAnt>0.5,sweepAngle,bnbUsage,averageDistance);
+        SbAS sbAS = new SbAS(CVRP2, (double) 1 / savingsSolution.getRoutes().size(), savingsSolution.getSolutionValue(), averageDistance);
+        solveMultipleTimes("SbAS", sbAS, seed, savingsSolution, CVRP2);
 
 
-			//Die Instanz werden mit den Metaheuristiken über die create excel funktion gelöst
-			createExcel("TS",ts,seed,savingsSolution,CVRP2);
-		}
+        //---------------------TABU SEARCH--------------------------------
+        //Parameter
+        Random random = new Random();
+        double[][] data = new double[1001][10];
+        for (int i = 0; i < 1; i++) {
+            double t = 0.3; //0.01 + Math.random() * 2;
+            data[i][0] = t;
+            double divFac = 20; // Math.random() * 100;
+            data[i][1] = divFac;
+            int noOfTabuIterations = 20; // (int) (10 + Math.random() * 140);
+            data[i][2] = noOfTabuIterations;
+            int noOfGlobalACOAIterations = 5; // (int) (1 + Math.random() * 5);
+            data[i][3] = noOfGlobalACOAIterations;
+            int noOfSubACOAIterations = 6;//(int) (1 + Math.random() * 9);
+            data[i][4] = noOfSubACOAIterations;
+            int cakePieces = 4;//(int) (3 + Math.random() * 3); //bestimmt die größe der n_r,s,10 Subprobleme
+            data[i][5] = cakePieces;
+            double randomAnt = 1; // Math.random();
+            data[i][6] = randomAnt;
+            double sweepAngle = -0.15; // Math.random()*2-1; // random Sweep oder konstanter Startwinkel: <0 - random, >0 - Range zwischen 5° und 150°
+            data[i][7] = sweepAngle;
+            int bnbUsage = 0; // random.nextInt(3); // 0 - kein BnB, 1  - im Dekompositionsansatz, 2 - in der Tabususche
+            data[i][8] = bnbUsage;
+
+            TabuSearchApproach ts = new TabuSearchApproach(CVRP2, savingsSolution, t, divFac, noOfTabuIterations, noOfGlobalACOAIterations,
+                    noOfSubACOAIterations, cakePieces, randomAnt > 0.5, sweepAngle, bnbUsage, averageDistance);
+
+
+            //Die Instanz werden mit den Metaheuristiken über die create excel funktion gelöst
+//            solveMultipleTimes("TS", ts, seed, savingsSolution, CVRP2);
+        }
 
 //		for (int i=0;i<data.length;i++){
 //			for (int j=0;j<data[i].length;j++){
@@ -208,62 +170,51 @@ public class Main {
 //		outStream.close();
 //		--------------------------------------TABUSEARCH END -------------------------
 
-		//LOCAL IMPROVEMENT
+        //LOCAL IMPROVEMENT
 //		LocalImprovement LI = new LocalImprovement(solution,1000,CVRP2);
 //		Draw.drawRoutes(LI.impmrove().routes, "LI",LI.impmrove().calcSolutionValue());
 
 
-
-
-
-
-
-
-
-
-
-
     }
 
-	public static void createExcel (String name, Heuristiken h,int seed, Solution savingsSolution, Problem CVRP2) throws IOException{
-    	XSSFWorkbook workbookSbas = new XSSFWorkbook();
-		XSSFSheet sheetSbas = workbookSbas.createSheet(Integer.toString(seed));
+    public static void solveMultipleTimes(String name, Heuristiken h, int seed, Solution savingsSolution, Problem CVRP2) throws IOException {
+        XSSFWorkbook workbookSbas = new XSSFWorkbook();
+        XSSFSheet sheetSbas = workbookSbas.createSheet(Integer.toString(seed));
 
-		Solution best = savingsSolution;
-		int lastRw = 0;
-		for (int i=0;i<10;i++) {
-			if (h instanceof SbAS){
-				((SbAS) h).resetPheromone();
-			}
+        Solution best = savingsSolution;
+        int lastRw = 0;
+        for (int i = 0; i < 10; i++) {
+            if (h instanceof SbAS) {
+                ((SbAS) h).resetPheromone();
+            }
 
-			Solution sol = h.solve();
-			if (sol.getSolutionValue() < best.getSolutionValue()) {
-				best = sol;
-			}
+            Solution sol = h.solve();
+            if (sol.getSolutionValue() < best.getSolutionValue()) {
+                best = sol;
+            }
 
-			int cols = 2;
+            int cols = 2;
 
 
+            outerLoop:
+            for (int r = 0; r < 30; r++) {
+                XSSFRow row = sheetSbas.createRow(r + lastRw);
+                for (int c = 0; c < cols; c++) {
+                    XSSFCell cell = row.createCell(c);
+                    double value = h.XLData[r][c];
+                    if (value == 0) {
+                        lastRw = lastRw + 1 + r;
+                        break outerLoop;
+                    }
+                    cell.setCellValue(value);
+                }
+            }
 
-			outerLoop:
-			for (int r = 0; r < 30; r++) {
-				XSSFRow row = sheetSbas.createRow(r + lastRw);
-				for (int c = 0; c < cols; c++) {
-					XSSFCell cell = row.createCell(c);
-					double value = h.XLData[r][c];
-					if (value == 0){
-						lastRw = lastRw + 1 + r;
-						break outerLoop;
-					}
-					cell.setCellValue(value);
-				}
-			}
-
-			String filePath = ".\\Datafiles\\"+name+".xlsx";
-			FileOutputStream outStream = new FileOutputStream(filePath);
-			workbookSbas.write(outStream);
-			outStream.close();
-		}
-		Draw.drawRoutes(best.getRoutes(), name, best.getSolutionValue());
-	}
+            String filePath = ".\\Datafiles\\" + name + ".xlsx";
+            FileOutputStream outStream = new FileOutputStream(filePath);
+            workbookSbas.write(outStream);
+            outStream.close();
+        }
+        Draw.drawRoutes(best.getRoutes(), name, best.getSolutionValue());
+    }
 }
