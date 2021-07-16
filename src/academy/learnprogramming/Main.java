@@ -14,7 +14,8 @@ import java.util.Random;
 public class Main {
 
 
-    //Instanzen werden bei den zwei Metaheuristiken (TS und SbAS) über die createExcel - Funktion gelöst
+    //Instanzen werden bei den zwei Metaheuristiken (TS und SbAS) über die solveMultipleTimes - Funktion gelöst
+    //und Werte in XL-Tabelle eingetragen
     public static void main(String[] args) throws IOException {
         int numberOfCustomers = 200;
         int numberOfVehicles = 10;
@@ -71,27 +72,22 @@ public class Main {
         double averageDistance = 16 + savingsSolution.getSolutionValue() / noOfUsedEdges;
 
 
-        //BRANCH AND BOUND
-//		Tree mit Root erstellen
-//		BranchAndBoundTree searchTree = new BranchAndBoundTree(CVRP,savingsSolution.getSolutionValue(),customers);
-//		System.out.println( "LB = " + searchTree.getRoot().calculateLowerBound());
-//		searchTree.traverse(null);
-//		Solution bnb = searchTree.solve();
-//		System.out.println("BNB" + bnb.getSolutionValue());
-//		Draw.drawRoutes(bnb.getRoutes(), "Branch and Bound",bnb.getSolutionValue());
 
 
-        //SBAS
+        //--------------------------------SBAS--------------------------------
 
 
         Solution best = savingsSolution;
 
         SbAS sbAS = new SbAS(CVRP2, (double) 1 / savingsSolution.getRoutes().size(), savingsSolution.getSolutionValue(), averageDistance);
+        //Die Instanz werden mit dem divide and conquer framework über diese funktion mehrfach gelöst
         solveMultipleTimes("SbAS", sbAS, seed, savingsSolution, CVRP2);
+
+        //--------------------------------SBAS END--------------------------------
 
 
         //---------------------TABU SEARCH--------------------------------
-        //Parameter
+        //Parameter des TSDA
         Random random = new Random();
         double[][] data = new double[1001][10];
         for (int i = 0; i < 1; i++) {
@@ -118,7 +114,7 @@ public class Main {
                     noOfSubACOAIterations, cakePieces, randomAnt > 0.5, sweepAngle, bnbUsage, averageDistance);
 
 
-            //Die Instanz werden mit den Metaheuristiken über die create excel funktion gelöst
+            //Die Instanz werden mit dem tsda über diese funktion mehrfach gelöst
 //            solveMultipleTimes("TS", ts, seed, savingsSolution, CVRP2);
         }
 
@@ -128,6 +124,8 @@ public class Main {
 //			}
 //		}
 //
+        //Tracking parameter quality
+
 //		XSSFWorkbook workbook = new XSSFWorkbook();
 //		XSSFSheet sheet = workbook.createSheet(Integer.toString(seed));
 //
@@ -169,10 +167,6 @@ public class Main {
 //		workbook.write(outStream);
 //		outStream.close();
 //		--------------------------------------TABUSEARCH END -------------------------
-
-        //LOCAL IMPROVEMENT
-//		LocalImprovement LI = new LocalImprovement(solution,1000,CVRP2);
-//		Draw.drawRoutes(LI.impmrove().routes, "LI",LI.impmrove().calcSolutionValue());
 
 
     }
